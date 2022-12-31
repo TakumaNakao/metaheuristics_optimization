@@ -1,8 +1,11 @@
 #pragma once
 
 #include <array>
+#include <vector>
 #include <functional>
+#include <optional>
 #include <random>
+#include <tuple>
 
 #include <Eigen/Core>
 
@@ -16,13 +19,14 @@ public:
     class Particle
     {
     private:
-        const std::function<double(Eigen::VectorXd)>& func_;
-        Eigen::VectorXd x_ = Eigen::VectorXd::Zero(D);
-        Eigen::VectorXd v_ = Eigen::VectorXd::Zero(D);
-        Eigen::VectorXd best_x_ = Eigen::VectorXd::Zero(D);
+        const std::function<double(Eigen::Matrix<double, D, 1>)>& func_;
+        Eigen::Matrix<double, D, 1> x_ = Eigen::VectorXd::Zero(D);
+        Eigen::Matrix<double, D, 1> v_ = Eigen::VectorXd::Zero(D);
+        Eigen::Matrix<double, D, 1> best_x_ = Eigen::VectorXd::Zero(D);
         double best_score_ = std::numeric_limits<double>::max();
-        std::mt19937 mt;
-        std::uniform_real_distribution<> rand = std::uniform_real_distribution<>(0.0, 1.0);
+        std::array<Eigen::Vector2d, D> range_;
+        std::mt19937 mt_;
+        std::uniform_real_distribution<> rand_ = std::uniform_real_distribution<>(0.0, 1.0);
         void update_best()
         {
             double score = func_(x_);
@@ -32,22 +36,36 @@ public:
             }
         }
     public:
-        Particle(const std::function<double(Eigen::VectorXd)>& func) : 
-            func_(func)
+        Particle(const std::function<double(Eigen::Matrix<double, D, 1>)>& func, std::array<Eigen::Vector2d, D> range, std::optional<Eigen::Matrix<double, D, 1>> init_x = std::nullopt) : 
+            func_(func),
+            range_(range)
         {
             std::random_device rnd;
-            mt = std::mt19937(rnd());
+            mt_ = std::mt19937(rnd());
+
+            if(init_x){
+                set_x(init_x.value());
+            }
+            else{
+                Eigen::Matrix<double, D, 1> x;
+                for(size_t i = 0; i < D; i++){
+                    std::uniform_real_distribution<> rand(range_[i][0], range_[i][1]);
+                    x[i] = rand(mt_);
+                }
+                set_x(x);
+            }
         }
-        void set_x(const Eigen::VectorXd& x)
+        void set_x(const Eigen::Matrix<double, D, 1>& x)
         {
-            x_ = x;
+            for(size_t i = 0; i < D; i++){
+                x_[i] = std::clamp(x[i], range_[i][0], range_[i][1]);
+            }
             update_best();
         }
-        void update_state(const Eigen::VectorXd& g_best_x, double w, double c1, double c2)
+        void update_state(const Eigen::Matrix<double, D, 1>& g_best_x, double w, double c1, double c2)
         {
-            v_ = w * v_ + c1 * rand(mt) * (best_x_ - x_) + c2 * rand(mt) * (g_best_x - x_);
-            x_ += v_;
-            update_best();
+            v_ = w * v_ + c1 * rand_(mt_) * (best_x_ - x_) + c2 * rand_(mt_) * (g_best_x - x_);
+            set_x(x_ + v_);
         }
         Eigen::VectorXd get_best_x() const
         {
@@ -60,9 +78,9 @@ public:
     };
 private:
     std::vector<Particle> particles_;
-    std::function<double(Eigen::VectorXd)> func_;
-    Eigen::VectorXd g_best_x_ = Eigen::VectorXd::Zero(D);
-    double g_best_score_ = std::numeric_limits<double>::max();;
+    std::function<double(Eigen::Matrix<double, D, 1>)> func_;
+    Eigen::Matrix<double, D, 1> g_best_x_ = Eigen::VectorXd::Zero(D);
+    double g_best_score_ = std::numeric_limits<double>::max();
 
     void update_particle(double w, double c1, double c2)
     {
@@ -81,22 +99,43 @@ private:
         }
     }
 public:
-    ParticleSwarmOptimization(std::function<double(Eigen::VectorXd)> func, std::array<Eigen::VectorXd, N> init_x) : 
+    ParticleSwarmOptimization(std::function<double(Eigen::Matrix<double, D, 1>)> func, std::array<Eigen::Vector2d, D> range, std::optional<std::array<Eigen::Matrix<double, D, 1>, N>> init_x = std::nullopt) : 
         func_(func)
     {
         particles_.reserve(N);
-        for(size_t i = 0; i < N; i++){
-            particles_.push_back(Particle(func_));
-            particles_[i].set_x(init_x[i]);
+        if(init_x){
+            for(size_t i = 0; i < N; i++){
+                particles_.push_back(Particle(func_, range, init_x.value()[i]));
+            }
+        }
+        else{
+            for(size_t i = 0; i < N; i++){
+                particles_.push_back(Particle(func_, range));
+            }
         }
         update_g_best();
     }
-    Eigen::VectorXd optimization(size_t loop_n, double w, double c1, double c2)
+    Eigen::Matrix<double, D, 1> optimization(size_t loop_n, double w, double c1, double c2)
     {
         for(size_t i = 0; i < loop_n; i++){
             update_particle(w, c1, c2);
         }
         return g_best_x_;
+    }
+    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>> optimization_log(size_t loop_n, double w, double c1, double c2)
+    {
+        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> log;
+        for(size_t i = 0; i < N; i++){
+            log[i].push_back(particles_[i].get_best_x());
+        }
+        for(size_t i = 0; i < loop_n; i++){
+            update_particle(w, c1, c2);
+            for(size_t j = 0; j < N; j++){
+                log[j].push_back(particles_[j].get_best_x());
+            }
+        }
+
+        return {g_best_x_, log};
     }
 };
 
