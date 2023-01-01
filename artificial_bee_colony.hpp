@@ -6,6 +6,7 @@
 #include <optional>
 #include <random>
 #include <tuple>
+#include <chrono>
 
 #include <Eigen/Core>
 
@@ -126,26 +127,6 @@ private:
             }
         }
     }
-    void update_bee(size_t count_limit)
-    {
-        int update_dim = dim_rand_(mt_);
-        double fitness_sum = 0;
-        for(size_t i = 0; i < N; i++){
-            bees_[i].employed_bee(update_dim, bees_[gen_rand_bee_id(i)].get_x());
-            fitness_sum += bees_[i].get_fitness();
-        }
-        if(fitness_sum != 0){
-            for(size_t i = 0; i < N; i++){
-                if(bees_[i].get_fitness() > onlooker_rand_(mt_) * fitness_sum){
-                    bees_[i].employed_bee(update_dim, bees_[gen_rand_bee_id(i)].get_x());
-                }
-            }
-        }
-        for(auto& bee : bees_){
-            bee.scout_bee(count_limit);
-        }
-        update_best();
-    }
     void update_best()
     {
         for(const auto& bee : bees_){
@@ -184,10 +165,38 @@ public:
         }
         update_best();
     }
+    void step(size_t count_limit)
+    {
+        int update_dim = dim_rand_(mt_);
+        double fitness_sum = 0;
+        for(size_t i = 0; i < N; i++){
+            bees_[i].employed_bee(update_dim, bees_[gen_rand_bee_id(i)].get_x());
+            fitness_sum += bees_[i].get_fitness();
+        }
+        if(fitness_sum != 0){
+            for(size_t i = 0; i < N; i++){
+                if(bees_[i].get_fitness() > onlooker_rand_(mt_) * fitness_sum){
+                    bees_[i].employed_bee(update_dim, bees_[gen_rand_bee_id(i)].get_x());
+                }
+            }
+        }
+        for(auto& bee : bees_){
+            bee.scout_bee(count_limit);
+        }
+        update_best();
+    }
     Eigen::Matrix<double, D, 1> optimization(size_t loop_n, size_t count_limit)
     {
         for(size_t i = 0; i < loop_n; i++){
-            update_bee(count_limit);
+            step(count_limit);
+        }
+        return best_x_;
+    }
+    Eigen::Matrix<double, D, 1> optimization(std::chrono::nanoseconds loop_time, size_t count_limit)
+    {
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(count_limit);
         }
         return best_x_;
     }
@@ -200,7 +209,26 @@ public:
         }
         cost_log.push_back(fitness_to_cost(best_fitness_));
         for(size_t i = 0; i < loop_n; i++){
-            update_bee(count_limit);
+            step(count_limit);
+            for(size_t j = 0; j < N; j++){
+                x_log[j].push_back(bees_[j].get_x());
+            }
+            cost_log.push_back(fitness_to_cost(best_fitness_));
+        }
+
+        return {best_x_, x_log, cost_log};
+    }
+    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>, std::vector<double>> optimization_log(std::chrono::nanoseconds loop_time, size_t count_limit)
+    {
+        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> x_log;
+        std::vector<double> cost_log;
+        for(size_t i = 0; i < N; i++){
+            x_log[i].push_back(bees_[i].get_x());
+        }
+        cost_log.push_back(fitness_to_cost(best_fitness_));
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(count_limit);
             for(size_t j = 0; j < N; j++){
                 x_log[j].push_back(bees_[j].get_x());
             }

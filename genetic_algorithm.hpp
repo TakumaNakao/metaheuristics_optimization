@@ -6,6 +6,7 @@
 #include <optional>
 #include <random>
 #include <tuple>
+#include <chrono>
 
 #include <Eigen/Core>
 
@@ -89,17 +90,6 @@ private:
         }
         return Individual(func_, childe_x);
     }
-    void update_indivisual(double mutation_ratio)
-    {
-        childe_individuals_.clear();
-        childe_individuals_.reserve(N);
-        std::sort(parent_individuals_.begin(), parent_individuals_.end(), [](const Individual& a, const Individual& b){ return a.get_fitness() > b.get_fitness(); });
-        for(size_t i = 0; i < N; i++){
-            childe_individuals_.push_back(random_cross(roulette(), roulette(), mutation_ratio));
-        }
-        parent_individuals_ = childe_individuals_;
-        update_best();
-    }
     void update_best()
     {
         for(const auto& indivisual : parent_individuals_){
@@ -143,10 +133,29 @@ public:
         }
         update_best();
     }
+    void step(double mutation_ratio)
+    {
+        childe_individuals_.clear();
+        childe_individuals_.reserve(N);
+        std::sort(parent_individuals_.begin(), parent_individuals_.end(), [](const Individual& a, const Individual& b){ return a.get_fitness() > b.get_fitness(); });
+        for(size_t i = 0; i < N; i++){
+            childe_individuals_.push_back(random_cross(roulette(), roulette(), mutation_ratio));
+        }
+        parent_individuals_ = childe_individuals_;
+        update_best();
+    }
     Eigen::Matrix<double, D, 1> optimization(size_t loop_n, double mutation_ratio)
     {
         for(size_t i = 0; i < loop_n; i++){
-            update_indivisual(mutation_ratio);
+            step(mutation_ratio);
+        }
+        return best_x_;
+    }
+    Eigen::Matrix<double, D, 1> optimization(std::chrono::nanoseconds loop_time, double mutation_ratio)
+    {
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(mutation_ratio);
         }
         return best_x_;
     }
@@ -159,7 +168,26 @@ public:
         }
         cost_log.push_back(fitness_to_cost(best_fitness_));
         for(size_t i = 0; i < loop_n; i++){
-            update_indivisual(mutation_ratio);
+            step(mutation_ratio);
+            for(size_t j = 0; j < N; j++){
+                x_log[j].push_back(parent_individuals_[j].get_x());
+            }
+            cost_log.push_back(fitness_to_cost(best_fitness_));
+        }
+
+        return {best_x_, x_log, cost_log};
+    }
+    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>, std::vector<double>> optimization_log(std::chrono::nanoseconds loop_time, double mutation_ratio)
+    {
+        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> x_log;
+        std::vector<double> cost_log;
+        for(size_t i = 0; i < N; i++){
+            x_log[i].push_back(parent_individuals_[i].get_x());
+        }
+        cost_log.push_back(fitness_to_cost(best_fitness_));
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(mutation_ratio);
             for(size_t j = 0; j < N; j++){
                 x_log[j].push_back(parent_individuals_[j].get_x());
             }

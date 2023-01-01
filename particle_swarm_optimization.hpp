@@ -6,6 +6,7 @@
 #include <optional>
 #include <random>
 #include <tuple>
+#include <chrono>
 
 #include <Eigen/Core>
 
@@ -80,13 +81,6 @@ private:
     Eigen::Matrix<double, D, 1> g_best_x_ = Eigen::VectorXd::Zero(D);
     double g_best_cost_ = std::numeric_limits<double>::max();
 
-    void update_particle(double w, double c1, double c2)
-    {
-        for(auto& particle : particles_){
-            particle.update_state(g_best_x_, w, c1, c2);
-        }
-        update_g_best();
-    }
     void update_g_best()
     {
         for(const auto& particle : particles_){
@@ -113,10 +107,25 @@ public:
         }
         update_g_best();
     }
+    void step(double w, double c1, double c2)
+    {
+        for(auto& particle : particles_){
+            particle.update_state(g_best_x_, w, c1, c2);
+        }
+        update_g_best();
+    }
     Eigen::Matrix<double, D, 1> optimization(size_t loop_n, double w, double c1, double c2)
     {
         for(size_t i = 0; i < loop_n; i++){
-            update_particle(w, c1, c2);
+            step(w, c1, c2);
+        }
+        return g_best_x_;
+    }
+    Eigen::Matrix<double, D, 1> optimization(std::chrono::nanoseconds loop_time, double w, double c1, double c2)
+    {
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(w, c1, c2);
         }
         return g_best_x_;
     }
@@ -129,7 +138,26 @@ public:
         }
         cost_log.push_back(g_best_cost_);
         for(size_t i = 0; i < loop_n; i++){
-            update_particle(w, c1, c2);
+            step(w, c1, c2);
+            for(size_t j = 0; j < N; j++){
+                x_log[j].push_back(particles_[j].get_best_x());
+            }
+            cost_log.push_back(g_best_cost_);
+        }
+
+        return {g_best_x_, x_log, cost_log};
+    }
+    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>, std::vector<double>> optimization_log(std::chrono::nanoseconds loop_time, double w, double c1, double c2)
+    {
+        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> x_log;
+        std::vector<double> cost_log;
+        for(size_t i = 0; i < N; i++){
+            x_log[i].push_back(particles_[i].get_best_x());
+        }
+        cost_log.push_back(g_best_cost_);
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(w, c1, c2);
             for(size_t j = 0; j < N; j++){
                 x_log[j].push_back(particles_[j].get_best_x());
             }

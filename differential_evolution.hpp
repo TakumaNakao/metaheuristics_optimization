@@ -6,6 +6,7 @@
 #include <optional>
 #include <random>
 #include <tuple>
+#include <chrono>
 
 #include <Eigen/Core>
 
@@ -95,24 +96,6 @@ private:
             }
         }
     }
-    void update_indivisual(double crossover_rate, double scaling)
-    {
-        for(size_t i = 0; i < N; i++){
-            Eigen::Matrix<double, D, 1> x1 = individuals_[gen_rand_individual_id(i)].get_x();
-            Eigen::Matrix<double, D, 1> x2 = individuals_[gen_rand_individual_id(i)].get_x();
-            Eigen::Matrix<double, D, 1> x3 = individuals_[gen_rand_individual_id(i)].get_x();
-            Eigen::Matrix<double, D, 1> v = x1 + scaling * (x2 - x3);
-            Eigen::Matrix<double, D, 1> x = individuals_[i].get_x();
-            int change_dim = dim_rand_(mt_);
-            for(size_t j = 0; j < D; j++){
-                if(j == change_dim || probability_rand_(mt_) < crossover_rate){
-                    x[j] = v[j];
-                }
-            }
-            individuals_[i].update(x);
-        }
-        update_best();
-    }
     void update_best()
     {
         for(const auto& individual : individuals_){
@@ -147,10 +130,36 @@ public:
         }
         update_best();
     }
+    void step(double crossover_rate, double scaling)
+    {
+        for(size_t i = 0; i < N; i++){
+            Eigen::Matrix<double, D, 1> x1 = individuals_[gen_rand_individual_id(i)].get_x();
+            Eigen::Matrix<double, D, 1> x2 = individuals_[gen_rand_individual_id(i)].get_x();
+            Eigen::Matrix<double, D, 1> x3 = individuals_[gen_rand_individual_id(i)].get_x();
+            Eigen::Matrix<double, D, 1> v = x1 + scaling * (x2 - x3);
+            Eigen::Matrix<double, D, 1> x = individuals_[i].get_x();
+            int change_dim = dim_rand_(mt_);
+            for(size_t j = 0; j < D; j++){
+                if(j == change_dim || probability_rand_(mt_) < crossover_rate){
+                    x[j] = v[j];
+                }
+            }
+            individuals_[i].update(x);
+        }
+        update_best();
+    }
     Eigen::Matrix<double, D, 1> optimization(size_t loop_n, double crossover_rate, double scaling)
     {
         for(size_t i = 0; i < loop_n; i++){
-            update_indivisual(crossover_rate, scaling);
+            step(crossover_rate, scaling);
+        }
+        return best_x_;
+    }
+    Eigen::Matrix<double, D, 1> optimization(std::chrono::nanoseconds loop_time, double crossover_rate, double scaling)
+    {
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(crossover_rate, scaling);
         }
         return best_x_;
     }
@@ -163,7 +172,26 @@ public:
         }
         cost_log.push_back(best_cost_);
         for(size_t i = 0; i < loop_n; i++){
-            update_indivisual(crossover_rate, scaling);
+            step(crossover_rate, scaling);
+            for(size_t j = 0; j < N; j++){
+                x_log[j].push_back(individuals_[j].get_x());
+            }
+            cost_log.push_back(best_cost_);
+        }
+
+        return {best_x_, x_log, cost_log};
+    }
+    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>, std::vector<double>> optimization_log(std::chrono::nanoseconds loop_time, double crossover_rate, double scaling)
+    {
+        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> x_log;
+        std::vector<double> cost_log;
+        for(size_t i = 0; i < N; i++){
+            x_log[i].push_back(individuals_[i].get_x());
+        }
+        cost_log.push_back(best_cost_);
+        auto start_time = std::chrono::system_clock::now();
+        while(std::chrono::system_clock::now() - start_time < loop_time){
+            step(crossover_rate, scaling);
             for(size_t j = 0; j < N; j++){
                 x_log[j].push_back(individuals_[j].get_x());
             }
