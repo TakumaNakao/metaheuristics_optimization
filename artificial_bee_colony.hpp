@@ -19,22 +19,31 @@ public:
     class Bee
     {
     private:
+        inline static std::random_device rnd_;
+        inline static std::mt19937 mt_ = std::mt19937(rnd_());
         const std::function<double(Eigen::Matrix<double, D, 1>)>& func_;
         Eigen::Matrix<double, D, 1> x_ = Eigen::VectorXd::Zero(D);
-        double score_ = std::numeric_limits<double>::max();
+        double fitness_ = 0;
         size_t count_ = 0;
         std::array<Eigen::Vector2d, D> range_;
-        std::mt19937 mt_;
         std::uniform_real_distribution<> employed_rand_ = std::uniform_real_distribution<>(-1.0, 1.0);
         std::uniform_real_distribution<> scout_rand_ = std::uniform_real_distribution<>(0.0, 1.0);
+
+        double calc_fitness(Eigen::Matrix<double, D, 1> x)
+        {
+            double cost = func_(x);
+            if(cost >= 0){
+                return 1.0 / (1.0 + cost);
+            }
+            else{
+                return 1.0 + std::fabs(cost);
+            }
+        }
     public:
         Bee(const std::function<double(Eigen::Matrix<double, D, 1>)>& func, std::array<Eigen::Vector2d, D> range, std::optional<Eigen::Matrix<double, D, 1>> init_x = std::nullopt) : 
             func_(func),
             range_(range)
         {
-            std::random_device rnd;
-            mt_ = std::mt19937(rnd());
-
             if(init_x){
                 set_x(init_x.value());
             }
@@ -47,16 +56,16 @@ public:
                 set_x(x);
             }
         }
-        void set_x(const Eigen::Matrix<double, D, 1>& x, std::optional<double> score = std::nullopt)
+        void set_x(const Eigen::Matrix<double, D, 1>& x, std::optional<double> fitness = std::nullopt)
         {
             for(size_t i = 0; i < D; i++){
                 x_[i] = std::clamp(x[i], range_[i][0], range_[i][1]);
             }
-            if(score){
-                score_ = score.value();
+            if(fitness){
+                fitness_ = fitness.value();
             }
             else{
-                score_ = func_(x_);
+                fitness_ = calc_fitness(x_);
             }
         }
         void employed_bee(int update_dim, const Eigen::Matrix<double, D, 1>& rand_bee_x)
@@ -64,9 +73,9 @@ public:
             double vd = x_[update_dim] + employed_rand_(mt_) * (x_[update_dim] - rand_bee_x[update_dim]);
             Eigen::Matrix<double, D, 1> v = x_;
             v[update_dim] = vd;
-            double v_score = func_(v);
-            if(v_score < score_){
-                set_x(v, v_score);
+            double v_fitness = calc_fitness(v);
+            if(v_fitness > fitness_){
+                set_x(v, v_fitness);
                 count_ = 0;
             }
             else{
@@ -85,22 +94,23 @@ public:
                     x[i] = range_[i][0] + scout_rand_(mt_) * (range_[i][1] - range_[i][0]);
                 }
                 set_x(x);
+                count_ = 0;
             }
         }
-        Eigen::VectorXd get_x() const
+        Eigen::Matrix<double, D, 1> get_x() const
         {
             return x_;
         }
-        double get_score() const
+        double get_fitness() const
         {
-            return score_;
+            return fitness_;
         }
     };
 private:
     std::vector<Bee> bees_;
     std::function<double(Eigen::Matrix<double, D, 1>)> func_;
     Eigen::Matrix<double, D, 1> best_x_ = Eigen::VectorXd::Zero(D);
-    double best_score_ = std::numeric_limits<double>::max();
+    double best_fitness_ = 0;
     std::mt19937 mt_;
     std::uniform_int_distribution<> dim_rand_ = std::uniform_int_distribution<>(0, D - 1);
     std::uniform_int_distribution<> bee_rand_ = std::uniform_int_distribution<>(0, N - 1);
@@ -119,15 +129,14 @@ private:
     void update_bee(size_t count_limit)
     {
         int update_dim = dim_rand_(mt_);
-        double score_sum = 0;
+        double fitness_sum = 0;
         for(size_t i = 0; i < N; i++){
             bees_[i].employed_bee(update_dim, bees_[gen_rand_bee_id(i)].get_x());
-            score_sum += bees_[i].get_score();
+            fitness_sum += bees_[i].get_fitness();
         }
-        if(score_sum != 0){
+        if(fitness_sum != 0){
             for(size_t i = 0; i < N; i++){
-                if(bees_[i].get_score() / score_sum > onlooker_rand_(mt_)){
-                    // bees_[i].onlooker_bee();
+                if(bees_[i].get_fitness() > onlooker_rand_(mt_) * fitness_sum){
                     bees_[i].employed_bee(update_dim, bees_[gen_rand_bee_id(i)].get_x());
                 }
             }
@@ -140,9 +149,9 @@ private:
     void update_best()
     {
         for(const auto& bee : bees_){
-            if(bee.get_score() < best_score_){
+            if(bee.get_fitness() > best_fitness_){
                 best_x_ = bee.get_x();
-                best_score_ = bee.get_score();
+                best_fitness_ = bee.get_fitness();
             }
         }
     }

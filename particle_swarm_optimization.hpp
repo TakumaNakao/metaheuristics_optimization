@@ -19,20 +19,21 @@ public:
     class Particle
     {
     private:
+        inline static std::random_device rnd_;
+        inline static std::mt19937 mt_ = std::mt19937(rnd_());
         const std::function<double(Eigen::Matrix<double, D, 1>)>& func_;
         Eigen::Matrix<double, D, 1> x_ = Eigen::VectorXd::Zero(D);
         Eigen::Matrix<double, D, 1> v_ = Eigen::VectorXd::Zero(D);
         Eigen::Matrix<double, D, 1> best_x_ = Eigen::VectorXd::Zero(D);
-        double best_score_ = std::numeric_limits<double>::max();
+        double best_cost_ = std::numeric_limits<double>::max();
         std::array<Eigen::Vector2d, D> range_;
-        std::mt19937 mt_;
         std::uniform_real_distribution<> rand_ = std::uniform_real_distribution<>(0.0, 1.0);
         void update_best()
         {
-            double score = func_(x_);
-            if(score < best_score_){
+            double cost = func_(x_);
+            if(cost < best_cost_){
                 best_x_ = x_;
-                best_score_ = score;
+                best_cost_ = cost;
             }
         }
     public:
@@ -40,9 +41,6 @@ public:
             func_(func),
             range_(range)
         {
-            std::random_device rnd;
-            mt_ = std::mt19937(rnd());
-
             if(init_x){
                 set_x(init_x.value());
             }
@@ -67,20 +65,20 @@ public:
             v_ = w * v_ + c1 * rand_(mt_) * (best_x_ - x_) + c2 * rand_(mt_) * (g_best_x - x_);
             set_x(x_ + v_);
         }
-        Eigen::VectorXd get_best_x() const
+        Eigen::Matrix<double, D, 1> get_best_x() const
         {
             return best_x_;
         }
-        double get_best_score() const
+        double get_best_cost() const
         {
-            return best_score_;
+            return best_cost_;
         }
     };
 private:
     std::vector<Particle> particles_;
     std::function<double(Eigen::Matrix<double, D, 1>)> func_;
     Eigen::Matrix<double, D, 1> g_best_x_ = Eigen::VectorXd::Zero(D);
-    double g_best_score_ = std::numeric_limits<double>::max();
+    double g_best_cost_ = std::numeric_limits<double>::max();
 
     void update_particle(double w, double c1, double c2)
     {
@@ -92,9 +90,9 @@ private:
     void update_g_best()
     {
         for(const auto& particle : particles_){
-            if(particle.get_best_score() < g_best_score_){
+            if(particle.get_best_cost() < g_best_cost_){
                 g_best_x_ = particle.get_best_x();
-                g_best_score_ = particle.get_best_score();
+                g_best_cost_ = particle.get_best_cost();
             }
         }
     }
