@@ -120,20 +120,23 @@ public:
         }
         return g_best_x_;
     }
-    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>> optimization_log(size_t loop_n, double w, double c1, double c2)
+    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>, std::vector<double>> optimization_log(size_t loop_n, double w, double c1, double c2)
     {
-        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> log;
+        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> x_log;
+        std::vector<double> cost_log;
         for(size_t i = 0; i < N; i++){
-            log[i].push_back(particles_[i].get_best_x());
+            x_log[i].push_back(particles_[i].get_best_x());
         }
+        cost_log.push_back(g_best_cost_);
         for(size_t i = 0; i < loop_n; i++){
             update_particle(w, c1, c2);
             for(size_t j = 0; j < N; j++){
-                log[j].push_back(particles_[j].get_best_x());
+                x_log[j].push_back(particles_[j].get_best_x());
             }
+            cost_log.push_back(g_best_cost_);
         }
 
-        return {g_best_x_, log};
+        return {g_best_x_, x_log, cost_log};
     }
 };
 

@@ -155,7 +155,15 @@ private:
             }
         }
     }
-
+    double fitness_to_cost(double fitness)
+    {
+        if(fitness > 1.0){
+            return 1.0 - fitness;
+        }
+        else{
+            return 1.0 / fitness - 1.0;
+        }
+    }
 public:
     ArtificialBeeColony(std::function<double(Eigen::Matrix<double, D, 1>)> func, std::array<Eigen::Vector2d, D> range, std::optional<std::array<Eigen::Matrix<double, D, 1>, N>> init_x = std::nullopt) : 
         func_(func)
@@ -183,20 +191,23 @@ public:
         }
         return best_x_;
     }
-    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>> optimization_log(size_t loop_n, size_t count_limit)
+    std::tuple<Eigen::Matrix<double, D, 1>, std::array<std::vector<Eigen::Matrix<double, D, 1>>, N>, std::vector<double>> optimization_log(size_t loop_n, size_t count_limit)
     {
-        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> log;
+        std::array<std::vector<Eigen::Matrix<double, D, 1>>, N> x_log;
+        std::vector<double> cost_log;
         for(size_t i = 0; i < N; i++){
-            log[i].push_back(bees_[i].get_x());
+            x_log[i].push_back(bees_[i].get_x());
         }
+        cost_log.push_back(fitness_to_cost(best_fitness_));
         for(size_t i = 0; i < loop_n; i++){
             update_bee(count_limit);
             for(size_t j = 0; j < N; j++){
-                log[j].push_back(bees_[j].get_x());
+                x_log[j].push_back(bees_[j].get_x());
             }
+            cost_log.push_back(fitness_to_cost(best_fitness_));
         }
 
-        return {best_x_, log};
+        return {best_x_, x_log, cost_log};
     }
 };
 
