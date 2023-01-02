@@ -51,7 +51,8 @@ public:
             }
             double cost = func_(x);
             if(cost_ > cost){
-                set_x(x, cost);
+                x_ = x;
+                cost_ = cost;
             }
         }
         void set_x(const Eigen::Matrix<double, D, 1>& x, std::optional<double> cost = std::nullopt)
