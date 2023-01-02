@@ -86,9 +86,6 @@ public:
         Eigen::Matrix<double, D, 1> x;
         for(size_t i = 0; i < D; i++){
             if(probability_rand_(mt_) < select_rate){
-                x[i] = range_[i][0] + probability_rand_(mt_) * (range_[i][1] - range_[i][0]);
-            }
-            else{
                 auto select_harmony_x = harmonies_[harmony_rand_(mt_)].get_x();
                 if(probability_rand_(mt_) < change_rate){
                     x[i] = std::clamp(select_harmony_x[i] + bandwidth * (probability_rand_(mt_) * 2.0 - 1.0) * (range_[i][1] - range_[i][0]), range_[i][0], range_[i][1]);
@@ -96,6 +93,10 @@ public:
                 else{
                     x[i] = select_harmony_x[i];
                 }
+            }
+            else{
+                
+                x[i] = range_[i][0] + probability_rand_(mt_) * (range_[i][1] - range_[i][0]);
             }
         }
         Harmony new_harmony(func_, x);
