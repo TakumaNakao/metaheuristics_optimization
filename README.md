@@ -4,7 +4,7 @@
 目的関数の最小化を行うライブラリ  
 
 ## 環境
-* c++17
+* C++17
 * Eigen
 
 ## サンプルコード
@@ -130,8 +130,8 @@ int main()
     //         y.push_back(l[i][1]);
     //         plt::plot(x, y, ".");
     //         plt::text(-30, -30, std::to_string(i + 1) + "/" + std::to_string(cost_log.size()));
-    //         plt::xlim(-32, 32);
-    //         plt::ylim(-32, 32);
+    //         plt::xlim(range[0][0], range[0][1]);
+    //         plt::ylim(range[0][0], range[0][1]);
     //     }
     //     plt::pause(0.05);
     // }
