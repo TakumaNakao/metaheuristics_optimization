@@ -1,0 +1,13 @@
+version: '3'
+services:
+  metaheuristics_optimization:
+    image: takumanakao/metaheuristics_optimization:latest
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - ../../metaheuristics_optimization:/home/metaheuristics_optimization
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+    working_dir: /home/metaheuristics_optimization
+    tty: true
